@@ -8,6 +8,7 @@ import TermsOfService from "./Components/TermsOfService";
 import { Box } from "@mui/material";
 import "./App.css";
 import ServicesPage from "./Pages/ServicesPage";
+import ProductPage from "./Pages/ProductPage";
 import CustomCursor from "./Components/CursorEffect/CursorEffetct";
 import ScrollToTop from "./Components/ScrollToTop";
 import Model from "./Components/Model";
@@ -24,6 +25,7 @@ const App = () => {
           <Route path="/model" element={<Model />} />
           <Route path="/about" element={<AboutUsPage />} />
           <Route path="/services" element={<ServicesPage />} />
+          <Route path="/product" element={<ProductPage />} />
           <Route path="/contact" element={<ContactForm />} />
           <Route path="/privacy&policy" element={<PrivacyPolicy />} />
           <Route path="/termsofservice" element={<TermsOfService />} />

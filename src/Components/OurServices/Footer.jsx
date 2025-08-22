@@ -855,7 +855,7 @@ const Footer = () => {
             textAlign: { xs: "center", sm: "left" },
           }}
         >
-          © {new Date().getFullYear()} Bhiwal Infotech Pvt. Ltd. All Rights
+          © {new Date().getFullYear()} Excollo Inc. All Rights
           Reserved.
         </Typography>
         <Box

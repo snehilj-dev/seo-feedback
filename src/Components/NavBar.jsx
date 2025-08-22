@@ -19,6 +19,7 @@ import MenuIcon from "@mui/icons-material/Menu";
 import HomeIcon from "@mui/icons-material/Home";
 import InfoIcon from "@mui/icons-material/Info";
 import BuildIcon from "@mui/icons-material/Build";
+import InventoryIcon from "@mui/icons-material/Inventory";
 import ContactMailIcon from "@mui/icons-material/ContactMail";
 import CloseIcon from "@mui/icons-material/Close";
 import ExcolloWebsiteLogo from "../assets/logo/ExcolloWebsiteLogo.png";
@@ -49,6 +50,7 @@ const NavBar = () => {
     { text: "Home", path: "/", icon: <HomeIcon /> },
     { text: "About Us", path: "/about", icon: <InfoIcon /> },
     { text: "Our Services", path: "/services", icon: <BuildIcon /> },
+    { text: "Product", path: "/product", icon: <InventoryIcon /> },
     { text: "Contact us", path: "/contact", icon: <ContactMailIcon /> },
   ];
 
@@ -169,9 +171,7 @@ const NavBar = () => {
               onClick={handleDrawerToggle}
               sx={{ display: { md: "none" } }}
             >
-              <MenuIcon
-                sx={{ color: "#fff", height: "40px", width: "40px" }}
-              />
+              <MenuIcon sx={{ color: "#fff", height: "40px", width: "40px" }} />
             </IconButton>
           ) : (
             <Box
@@ -246,6 +246,26 @@ const NavBar = () => {
                 }}
               >
                 Services
+              </Typography>
+              <Typography
+                component={Link}
+                to="/product"
+                sx={{
+                  ...commonLinkStyles,
+                  height: "100%",
+                  fontWeight: "200",
+                  padding: {
+                    md: "0.5vw 0.8vw",
+                  },
+                  mt: 1,
+                  "&:hover": {
+                    background:
+                      "linear-gradient(180deg, rgba(170, 63, 255, 0.9) 0%, rgba(94, 129, 235, 0.9) 100%)",
+                    borderRadius: "80px",
+                  },
+                }}
+              >
+                Product
               </Typography>
               <Typography
                 component={Link}
