@@ -1,1 +1,3 @@
+/.netlify/functions/seo-feedback/status/* /.netlify/functions/seo-feedback-status/:splat 200
+/.netlify/functions/seo-feedback/status /.netlify/functions/seo-feedback-status 200
 /* /index.html 200
