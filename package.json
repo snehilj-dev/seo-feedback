@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start:proxy": "node server/proxy.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -18,9 +19,11 @@
     "@react-three/fiber": "^8.17.14",
     "@tsparticles/react": "^3.0.0",
     "@tsparticles/slim": "^3.7.1",
+    "dotenv": "^17.2.3",
     "framer-motion": "^11.16.1",
     "gsap": "^3.12.5",
     "lucide-react": "^0.469.0",
+    "node-fetch": "^3.3.2",
     "react": "^18.3.1",
     "react-aos": "^1.0.1",
     "react-dom": "^18.3.1",
