@@ -34,8 +34,14 @@ const SEOFeedback = () => {
   const [pollingInterval, setPollingInterval] = useState(null);
 
   // Use local proxy to avoid CORS and client timeouts. Start with `npm run start:proxy`.
-  const webhookUrl = `${import.meta.env.WEBHOOK_URL}/seo-feedback` || "http://localhost:3001/seo-feedback";
-  const statusUrl = `${import.meta.env.WEBHOOK_URL}/seo-feedback/status` || "http://localhost:3001/seo-feedback/status";
+  // NOTE: Vite exposes env vars on the client only if they begin with `VITE_`.
+  // Use `VITE_WEBHOOK_URL` in your `.env` or set it in Netlify build environment variables.
+  // Also avoid the pitfall where a template string with `undefined` becomes a truthy string,
+  // so use a base value and then compose the final endpoints.
+  const baseWebhook = import.meta.env.VITE_WEBHOOK_URL || "http://localhost:3001";
+  const normalizedBase = baseWebhook.replace(/\/+$/, ""); // remove trailing slash if any
+  const webhookUrl = `${normalizedBase}/seo-feedback`;
+  const statusUrl = `${normalizedBase}/seo-feedback/status`;
 
   // Function to check execution status
   const checkExecutionStatus = async (executionId) => {
