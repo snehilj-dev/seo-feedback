@@ -34,8 +34,8 @@ const SEOFeedback = () => {
   const [pollingInterval, setPollingInterval] = useState(null);
 
   // Use local proxy to avoid CORS and client timeouts. Start with `npm run start:proxy`.
-  const webhookUrl = "http://localhost:3001/seo-feedback";
-  const statusUrl = "http://localhost:3001/seo-feedback/status";
+  const webhookUrl = `${import.meta.env.WEBHOOK_URL}/seo-feedback` || "http://localhost:3001/seo-feedback";
+  const statusUrl = `${import.meta.env.WEBHOOK_URL}/seo-feedback/status` || "http://localhost:3001/seo-feedback/status";
 
   // Function to check execution status
   const checkExecutionStatus = async (executionId) => {
