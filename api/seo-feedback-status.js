@@ -17,11 +17,15 @@ export default async function handler(req, res) {
     if (!N8N_API) {
         return res.status(404).json({ error: 'Not found' });
     }
+    // If the API requires authentication but no key is configured, return a clear message
+    if (!N8N_API_KEY) {
+        return res.status(401).json({ error: 'Unauthorized', message: 'N8N_API_KEY not configured on server' });
+    }
 
     try {
         const apiRes = await fetch(`${N8N_API}/executions/${executionId}`, {
             headers: {
-                'X-N8N-API-KEY': N8N_API_KEY,
+                ...(N8N_API_KEY ? { 'X-N8N-API-KEY': N8N_API_KEY } : {}),
                 'Accept': 'application/json'
             }
         });
