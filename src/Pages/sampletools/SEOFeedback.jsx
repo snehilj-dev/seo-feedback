@@ -33,21 +33,29 @@ const SEOFeedback = () => {
   const [executionStatus, setExecutionStatus] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(null);
 
-  // Use local proxy to avoid CORS and client timeouts. Start with `npm run start:proxy`.
-  // NOTE: Vite exposes env vars on the client only if they begin with `VITE_`.
-  // Use `VITE_WEBHOOK_URL` in your `.env` or set it in Netlify build environment variables.
-  // Also avoid the pitfall where a template string with `undefined` becomes a truthy string,
-  // so use a base value and then compose the final endpoints.
-  const baseWebhook = import.meta.env.VITE_WEBHOOK_URL || "http://localhost:3001";
+  // Endpoint resolution:
+  // - If `VITE_WEBHOOK_URL` is provided, we assume a Netlify function/proxy base (".../seo-feedback").
+  // - If in dev with no explicit base, use local proxy at http://localhost:3001 started via `npm run start:proxy`.
+  // - Otherwise (production without explicit base), use Vercel serverless routes under `/api`.
+  const isDev = import.meta.env.DEV;
+  const configuredBase = import.meta.env.VITE_WEBHOOK_URL && String(import.meta.env.VITE_WEBHOOK_URL).trim();
+  const resolvedBase = configuredBase || (isDev ? "http://localhost:3001" : "");
 
-  const normalizedBase = baseWebhook.replace(/\/+$/, ""); // remove trailing slash if any
-  const webhookUrl = `${normalizedBase}/seo-feedback`;
-  const statusUrl = `${normalizedBase}/seo-feedback/status`;
+  const normalizedBase = resolvedBase.replace(/\/+$/, ""); // remove trailing slash if any
+  const usingApiPrefix = normalizedBase === ""; // production on Vercel (no external base configured)
+
+  // Webhook and status endpoints per environment
+  const webhookUrl = usingApiPrefix ? `/api/seo-feedback` : `${normalizedBase}/seo-feedback`;
+  // Status route shape differs: Vercel uses query param, Netlify/local use REST-style path
+  const buildStatusUrl = (executionId) =>
+    usingApiPrefix
+      ? `/api/seo-feedback-status?executionId=${encodeURIComponent(executionId)}`
+      : `${normalizedBase}/seo-feedback/status/${encodeURIComponent(executionId)}`;
 
   // Function to check execution status
   const checkExecutionStatus = async (executionId) => {
     try {
-      const response = await fetch(`${statusUrl}/${executionId}`);
+      const response = await fetch(buildStatusUrl(executionId));
       const data = await response.json();
       console.log('Execution status:', data);
       if (!response.ok) {
