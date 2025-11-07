@@ -39,6 +39,7 @@ const SEOFeedback = () => {
   // Also avoid the pitfall where a template string with `undefined` becomes a truthy string,
   // so use a base value and then compose the final endpoints.
   const baseWebhook = import.meta.env.VITE_WEBHOOK_URL || "http://localhost:3001";
+
   const normalizedBase = baseWebhook.replace(/\/+$/, ""); // remove trailing slash if any
   const webhookUrl = `${normalizedBase}/seo-feedback`;
   const statusUrl = `${normalizedBase}/seo-feedback/status`;
