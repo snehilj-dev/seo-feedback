@@ -39,10 +39,11 @@ const SEOFeedback = () => {
   // - Otherwise (production without explicit base), use Vercel serverless routes under `/api`.
   const isDev = import.meta.env.DEV;
   const configuredBase = import.meta.env.VITE_WEBHOOK_URL && String(import.meta.env.VITE_WEBHOOK_URL).trim();
-  const resolvedBase = configuredBase || (isDev ? "http://localhost:3001" : "");
+  // In production (e.g., Vercel), always use /api serverless routes regardless of configuredBase
+  const resolvedBase = isDev ? (configuredBase || "http://localhost:3001") : "";
 
   const normalizedBase = resolvedBase.replace(/\/+$/, ""); // remove trailing slash if any
-  const usingApiPrefix = normalizedBase === ""; // production on Vercel (no external base configured)
+  const usingApiPrefix = !isDev; // production => use /api routes
 
   // Webhook and status endpoints per environment
   const webhookUrl = usingApiPrefix ? `/api/seo-feedback` : `${normalizedBase}/seo-feedback`;
