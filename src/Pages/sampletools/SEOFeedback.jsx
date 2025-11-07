@@ -44,7 +44,7 @@ const SEOFeedback = () => {
 
   const normalizedBase = resolvedBase.replace(/\/+$/, ""); // remove trailing slash if any
   const usingApiPrefix = !isDev; // production => use /api routes
-
+  console.log('usingApiPrefix', usingApiPrefix);
   // Webhook and status endpoints per environment
   const webhookUrl = usingApiPrefix ? `/api/seo-feedback` : `${normalizedBase}/seo-feedback`;
   // Status route shape differs: Vercel uses query param, Netlify/local use REST-style path
