@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Box, Container, Typography, TextField, Button, Fade } from "@mui/material";
+import { Box, Container, Typography, TextField, Button, Fade, Dialog, DialogContent, IconButton } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import { IoLogoWhatsapp } from "react-icons/io5";
 import NavBar from "../../Components/NavBar";
 import Footer from "../../Components/Footer";
@@ -21,6 +22,7 @@ const SEOFeedback = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [submittedDetails, setSubmittedDetails] = useState(null);
   const [showWhatsAppButton, setShowWhatsAppButton] = useState(false);
+  const [showStatusDialog, setShowStatusDialog] = useState(false);
 
   const webhookEndpoint = resolveWebhookEndpoint();
 
@@ -56,11 +58,13 @@ const SEOFeedback = () => {
 
       setSubmittedDetails({ url: trimmedUrl, email: trimmedEmail });
       setSuccessMessage("Report PDF will be sent to the entered email. Please check again in approximately 10 minutes.");
+      setShowStatusDialog(true);
       setUrl("");
       setEmail("");
     } catch (err) {
       console.error("Error submitting SEO feedback request:", err);
       setError(err.message || "Failed to submit URL. Please try again.");
+      setShowStatusDialog(true);
     } finally {
       setLoading(false);
     }
@@ -73,6 +77,17 @@ const SEOFeedback = () => {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Auto-close dialog after 15 seconds
+  useEffect(() => {
+    if (showStatusDialog) {
+      const timer = setTimeout(() => {
+        setShowStatusDialog(false);
+      }, 15000); // 15 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [showStatusDialog]);
 
   const handleWhatsapp = () => {
     window.open(
@@ -99,7 +114,7 @@ const SEOFeedback = () => {
         }}
       />
 
-      <Box sx={{ position: "relative", zIndex: 3 }}>
+      <Box sx={{ position: "relative", zIndex: 3 }}> 
         <NavBar />
       </Box>
 
@@ -240,80 +255,6 @@ const SEOFeedback = () => {
           </Button>
         </Box>
 
-        {(error || successMessage || submittedDetails) && (
-          <Box
-            sx={{
-              mt: { xs: 3, sm: 4, md: 5 },
-              mx: "auto",
-              width: "100%",
-              maxWidth: { xs: "100%", sm: 800, md: 900 },
-              background: "rgba(0,0,0,0.3)",
-              backdropFilter: "blur(10px)",
-              border: "1px solid rgba(126, 34, 206, 0.3)",
-              borderRadius: 2,
-              p: { xs: 2, sm: 3, md: 4 },
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: { xs: 18, sm: 20, md: 24 },
-                fontWeight: 600,
-                color: "#7e22ce",
-                mb: 2,
-                textAlign: "center",
-              }}
-            >
-              Status
-            </Typography>
-
-            {submittedDetails && (
-              <Box sx={{ mb: 2, color: "rgba(255,255,255,0.85)" }}>
-                <Typography variant="body2">
-                  <strong>URL:</strong> {submittedDetails.url}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Email:</strong> {submittedDetails.email}
-                </Typography>
-              </Box>
-            )}
-
-            {successMessage && (
-              <Box
-                sx={{
-                  mb: 2,
-                  p: 2,
-                  borderRadius: 1,
-                  backgroundColor: "rgba(34,197,94,0.12)",
-                  border: "1px solid rgba(34,197,94,0.2)",
-                  color: "rgba(209,250,229,0.9)",
-                }}
-              >
-                <Typography variant="body2">{successMessage}</Typography>
-              </Box>
-            )}
-
-            {error && (
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: 1,
-                  backgroundColor: "rgba(220,38,38,0.12)",
-                  border: "1px solid rgba(220,38,38,0.2)",
-                  color: "rgba(254,226,226,0.9)",
-                }}
-              >
-                <Typography variant="body2">{error}</Typography>
-              </Box>
-            )}
-
-            {!loading && !error && !successMessage && submittedDetails && (
-              <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.7)" }}>
-                Your request has been recorded. The workflow will continue running in the background
-                and email the PDF report once it's ready.
-              </Typography>
-            )}
-          </Box>
-        )}
       </Container>
 
       <Container
@@ -359,6 +300,91 @@ const SEOFeedback = () => {
           <IoLogoWhatsapp size={30} />
         </Button>
       </Fade>
+
+      {/* Status Dialog Popup */}
+      <Dialog
+        open={showStatusDialog}
+        onClose={() => setShowStatusDialog(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            background: "rgba(0,0,0,0.95)",
+            backdropFilter: "blur(10px)",
+            border: "1px solid rgba(126, 34, 206, 0.3)",
+            borderRadius: 2,
+          },
+        }}
+      >
+        <DialogContent sx={{ p: { xs: 2, sm: 3, md: 4 }, position: "relative" }}>
+          <IconButton
+            onClick={() => setShowStatusDialog(false)}
+            sx={{
+              position: "absolute",
+              right: 8,
+              top: 8,
+              color: "rgba(255,255,255,0.7)",
+              "&:hover": {
+                color: "#fff",
+              },
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+
+          <Typography
+            sx={{
+              fontSize: { xs: 18, sm: 20, md: 24 },
+              fontWeight: 600,
+              color: "#7e22ce",
+              mb: 2,
+              textAlign: "center",
+            }}
+          >
+            Status
+          </Typography>
+
+          {submittedDetails && (
+            <Box sx={{ mb: 2, color: "rgba(255,255,255,0.85)" }}>
+              <Typography variant="body2">
+                <strong>URL:</strong> {submittedDetails.url}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Email:</strong> {submittedDetails.email}
+              </Typography>
+            </Box>
+          )}
+
+          {successMessage && (
+            <Box
+              sx={{
+                mb: 2,
+                p: 2,
+                borderRadius: 1,
+                backgroundColor: "rgba(34,197,94,0.12)",
+                border: "1px solid rgba(34,197,94,0.2)",
+                color: "rgba(209,250,229,0.9)",
+              }}
+            >
+              <Typography variant="body2">{successMessage}</Typography>
+            </Box>
+          )}
+
+          {error && (
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: 1,
+                backgroundColor: "rgba(220,38,38,0.12)",
+                border: "1px solid rgba(220,38,38,0.2)",
+                color: "rgba(254,226,226,0.9)",
+              }}
+            >
+              <Typography variant="body2">{error}</Typography>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
