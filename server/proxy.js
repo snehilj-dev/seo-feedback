@@ -6,6 +6,7 @@ import 'dotenv/config';
 
 // Load environment variables with fallbacks
 const TARGET = process.env.TARGET_WEBHOOK || 'https://n8n-excollo.azurewebsites.net/webhook/528aa770-e351-4ae0-9626-38b398e40487';
+const TARGET_STATUS = process.env.TARGET_STATUS_WEBHOOK || '';
 const PORT = process.env.PORT || 3001;
 const N8N_API = process.env.N8N_API || '';
 const N8N_API_KEY = process.env.N8N_API_KEY || '';
@@ -15,6 +16,7 @@ console.log('Starting proxy with configuration:');
 console.log('- PORT:', PORT);
 console.log('- N8N_API:', N8N_API);
 console.log('- TARGET webhook configured:', !!TARGET);
+console.log('- TARGET status webhook configured:', !!TARGET_STATUS);
 
 function sendJSON(res, status, obj) {
     const s = JSON.stringify(obj);
@@ -242,7 +244,51 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Status polling endpoint with active n8n polling
-    if (req.method === 'GET' && req.url && req.url.startsWith('/seo-feedback/status/')) {
+    if (req.method === 'GET' && req.url && req.url.startsWith('/seo-feedback/status')) {
+        if (TARGET_STATUS) {
+            try {
+                const urlObj = new URL(req.url, `http://localhost:${PORT}`);
+                let jobId = urlObj.searchParams.get('jobId');
+
+                if (!jobId) {
+                    const parts = urlObj.pathname.split('/');
+                    jobId = parts[parts.length - 1] || '';
+                    if (jobId === 'status') {
+                        jobId = '';
+                    }
+                }
+
+                if (!jobId) {
+                    sendJSON(res, 400, { error: 'No jobId provided' });
+                    return;
+                }
+
+                const forwardUrl = new URL(TARGET_STATUS);
+                forwardUrl.searchParams.set('jobId', jobId);
+
+                const fetchFn = global.fetch || (await import('node-fetch')).default;
+                const forwardRes = await fetchFn(forwardUrl.toString(), {
+                    method: 'GET',
+                    headers: {
+                        Accept: 'application/json'
+                    }
+                });
+
+                const text = await forwardRes.text();
+                const contentType = forwardRes.headers.get && forwardRes.headers.get('content-type') || 'application/json';
+
+                res.writeHead(forwardRes.status, {
+                    'Content-Type': contentType,
+                    'Access-Control-Allow-Origin': '*'
+                });
+                res.end(text);
+            } catch (err) {
+                console.error('Status proxy error:', err);
+                sendJSON(res, 500, { error: String(err) });
+            }
+            return;
+        }
+
         const parts = req.url.split('/');
         const execId = parts[parts.length - 1];
 

@@ -15,13 +15,20 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const TARGET = process.env.TARGET_WEBHOOK || 'https://n8n-excollo.azurewebsites.net/webhook/528aa770-e351-4ae0-9626-38b398e40487';
+    const targetEndpoint = process.env.TARGET_WEBHOOK || '';
+
+    if (!targetEndpoint) {
+        return res.status(500).json({
+            error: 'TARGET_WEBHOOK not configured',
+            message: 'Set the public n8n submit webhook URL in the environment before calling this endpoint.'
+        });
+    }
 
     try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 360000); // 6 minute timeout
 
-        const forwardRes = await fetch(TARGET, {
+        const forwardRes = await fetch(targetEndpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -44,26 +51,23 @@ export default async function handler(req, res) {
         }
 
         const contentType = forwardRes.headers.get('content-type') || 'application/octet-stream';
-        const data = await forwardRes.buffer();
+        const buffer = await forwardRes.arrayBuffer();
 
-        // Handle JSON responses for execution tracking
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Content-Type', contentType);
+        res.status(forwardRes.status);
+
         if (contentType.includes('application/json')) {
+            const text = Buffer.from(buffer).toString('utf8');
             try {
-                const parsed = JSON.parse(data.toString());
-                const item = Array.isArray(parsed) ? parsed[0] : parsed;
-                if (item && (item.executionId || item.id)) {
-                    const execId = String(item.executionId || item.id);
-                    // Store execution info in your preferred storage solution
-                    // For Vercel, consider using Vercel KV, Redis, or other storage solutions
-                }
-            } catch (e) {
-                // ignore JSON parse errors
+                return res.json(JSON.parse(text));
+            } catch (err) {
+                console.warn('Failed to parse submit webhook JSON response, returning raw text');
+                return res.send(text);
             }
         }
 
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        return res.send(data);
+        return res.send(Buffer.from(buffer));
 
     } catch (err) {
         console.error('Proxy error:', err);

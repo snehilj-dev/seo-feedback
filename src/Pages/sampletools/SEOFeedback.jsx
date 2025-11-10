@@ -11,6 +11,108 @@ import NavBar from "../../Components/NavBar";
 import Footer from "../../Components/Footer";
 import Excollo3DCaseStudy from "../../Components/AboutUs/Excollo3DCaseStudy";
 
+const CONTINUOUS_STATUSES = new Set(["processing", "pending", "queued", "running", "in_progress"]);
+
+const normalizeJobPayload = (payload) => {
+  if (payload === undefined || payload === null) {
+    return { raw: payload };
+  }
+
+  let value = payload;
+
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch (err) {
+      return { raw: payload };
+    }
+  }
+
+  if (Array.isArray(value)) {
+    value = value[0];
+  }
+
+  if (!value || typeof value !== 'object') {
+    return { raw: value };
+  }
+
+  const jobId = value.jobId || value.executionId || value.id || value.execution_id || null;
+  const status = value.status || value.state || value.executionStatus || null;
+  const message = value.message || value.detail || value.error || null;
+
+  let result = value.result;
+  if (result === undefined || result === null) {
+    if (value.data !== undefined) result = value.data;
+    else if (value.payload !== undefined) result = value.payload;
+    else if (value.output !== undefined) result = value.output;
+    else if (value.body !== undefined) result = value.body;
+    else result = value;
+  }
+
+  return {
+    jobId: jobId ? String(jobId) : null,
+    status: status ? String(status).toLowerCase() : null,
+    message: message || null,
+    result,
+    raw: value
+  };
+};
+
+const extractFileData = (source) => {
+  const seen = new WeakSet();
+  const stack = [source];
+
+  while (stack.length) {
+    const current = stack.pop();
+
+    if (current === undefined || current === null) {
+      continue;
+    }
+
+    if (typeof current === 'string') {
+      const trimmed = current.trim();
+      if (trimmed.startsWith('JVBER')) {
+        return { pdfBase64: current };
+      }
+      continue;
+    }
+
+    if (typeof current !== 'object') {
+      continue;
+    }
+
+    if (seen.has(current)) {
+      continue;
+    }
+    seen.add(current);
+
+    if (Array.isArray(current)) {
+      for (const item of current) {
+        stack.push(item);
+      }
+      continue;
+    }
+
+    for (const [key, value] of Object.entries(current)) {
+      if (key === 'pdfBlob' && value) {
+        return { pdfBlob: value };
+      }
+      if ((key === 'pdfBase64' || key === 'pdf_base64') && typeof value === 'string') {
+        return { pdfBase64: value };
+      }
+      if (key === 'pdf' && typeof value === 'string' && value.trim().startsWith('JVBER')) {
+        return { pdfBase64: value };
+      }
+
+      if (typeof value === 'string' || typeof value === 'object') {
+        stack.push(value);
+      }
+    }
+  }
+
+  return {};
+};
+
 /**
  * SEOFeedback Component
  * Interactive demo showcasing SEO analysis and feedback AI capabilities
@@ -32,6 +134,8 @@ const SEOFeedback = () => {
   const [responseData, setResponseData] = useState(null);
   const [executionStatus, setExecutionStatus] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(null);
+  const [activeJobId, setActiveJobId] = useState(null);
+  const isProcessing = executionStatus?.status ? CONTINUOUS_STATUSES.has(executionStatus.status) : false;
 
   // Endpoint resolution:
   // - If `VITE_WEBHOOK_URL` is provided, we assume a Netlify function/proxy base (".../seo-feedback").
@@ -46,23 +150,33 @@ const SEOFeedback = () => {
   const usingApiPrefix = !isDev; // production => use /api routes
   // Webhook and status endpoints per environment
   const webhookUrl = usingApiPrefix ? `/api/seo-feedback` : `${normalizedBase}/seo-feedback`;
-  // Status route shape differs: Vercel uses query param, Netlify/local use REST-style path
-  const buildStatusUrl = (executionId) =>
+  // Status endpoint expects jobId as a query parameter in both environments
+  const buildStatusUrl = (jobId) =>
     usingApiPrefix
-      ? `/api/seo-feedback-status?executionId=${encodeURIComponent(executionId)}`
-      : `${normalizedBase}/seo-feedback/status/${encodeURIComponent(executionId)}`;
+      ? `/api/seo-feedback-status?jobId=${encodeURIComponent(jobId)}`
+      : `${normalizedBase}/seo-feedback/status?jobId=${encodeURIComponent(jobId)}`;
 
   // Function to check execution status
-  const checkExecutionStatus = async (executionId) => {
+  const checkExecutionStatus = async (jobId) => {
     try {
-      const response = await fetch(buildStatusUrl(executionId));
-      const data = await response.json();
-      console.log('Execution status:', data);
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to check status');
+      const response = await fetch(buildStatusUrl(jobId));
+      const text = await response.text();
+      let parsed;
+
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch (err) {
+        parsed = text;
       }
 
-      return data;
+      if (!response.ok) {
+        const message = (parsed && typeof parsed === 'object' && (parsed.message || parsed.error)) || text || 'Failed to check status';
+        throw new Error(message);
+      }
+
+      const normalized = normalizeJobPayload(parsed);
+      console.log('Execution status:', normalized);
+      return normalized;
     } catch (err) {
       console.error('Status check failed:', err);
       throw err;
@@ -70,34 +184,46 @@ const SEOFeedback = () => {
   };
 
   // Start polling for results
-  const startPolling = (executionId) => {
+  const startPolling = (jobId) => {
+    if (!jobId) return;
+
     if (pollingInterval) {
       clearInterval(pollingInterval);
     }
 
+    setActiveJobId(jobId);
+
     const interval = setInterval(async () => {
       try {
-        const status = await checkExecutionStatus(executionId);
+        const status = await checkExecutionStatus(jobId);
         console.log('Polled execution status:', status);
         setExecutionStatus(status);
 
-        if (status.status !== 'processing') {
+        const currentStatus = status.status || '';
+        const finalPayload = status.result ?? status.raw ?? status;
+        if (!CONTINUOUS_STATUSES.has(currentStatus)) {
           console.log('Polling complete, final status:', status);
           clearInterval(interval);
           setPollingInterval(null);
+          setActiveJobId(null);
 
-          if (status.status === 'completed') {
-            setResponseData(status);
-            console.log('Final response data:', status);
+          if (currentStatus === 'completed') {
+            const fileData = extractFileData(finalPayload);
+            setResponseData(fileData.pdfBlob || fileData.pdfBase64 ? { ...fileData, raw: finalPayload } : { raw: finalPayload });
             setLoading(false);
-          } else if (status.status === 'error') {
+          } else if (currentStatus === 'error') {
             throw new Error(status.message || 'Execution failed');
+          } else {
+            const fileData = extractFileData(finalPayload);
+            setResponseData(fileData.pdfBase64 || fileData.pdfBlob ? { ...fileData, raw: finalPayload } : { raw: finalPayload });
+            setLoading(false);
           }
         }
       } catch (err) {
         clearInterval(interval);
         setPollingInterval(null);
-        setError(err.message);
+        setActiveJobId(null);
+        setError(err.message || 'Failed to check status');
         setLoading(false);
       }
     }, 5000); // Check every 5 seconds
@@ -122,6 +248,7 @@ const SEOFeedback = () => {
     setError("");
     setExecutionStatus(null);
     setResponseData(null);
+    setActiveJobId(null);
 
     try {
       const response = await fetch(webhookUrl, {
@@ -133,40 +260,60 @@ const SEOFeedback = () => {
         body: JSON.stringify({ url })
       });
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
+      const text = await response.text();
+      let parsed;
+
+      try {
+        parsed = text ? JSON.parse(text) : null;
+      } catch (err) {
+        parsed = text;
       }
 
-      const data = await response.json();
-      console.log('Webhook response:', data);
-      console.log('Webhook response status:', data[0].status);
-      // console.log(data.Accept)
-      if (data[0].status === 'processing' && data[0].executionId) {
-        setExecutionStatus(data);
-        console.log('Starting polling for execution ID:', data[0].executionId);
-        startPolling(data[0].executionId);
-        setSubmitted(url);
-        setUrl("");
+      if (!response.ok) {
+        const message = (parsed && typeof parsed === 'object' && (parsed.message || parsed.error)) || text || 'Failed to submit URL. Please try again.';
+        throw new Error(message);
       }
-      else if (data && data[0].pdfBlob) {
-        setResponseData({ pdfBlob: data[0].pdfBlob });
-        setSubmitted(url);
-        setUrl("");
+
+      const normalized = normalizeJobPayload(parsed);
+      console.log('Webhook response (normalized):', normalized);
+
+      if (normalized.status === 'error') {
+        throw new Error(normalized.message || 'Workflow reported an error');
       }
-      else if (data && (data[0].pdfBase64 || data[0].pdf_base64 || data[0].pdf)) {
-        const base64 = data[0].pdfBase64 || data[0].pdf_base64 || data[0].pdf;
-        setResponseData({ pdfBase64: base64, raw: data });
-        setSubmitted(url);
-        setUrl("");
+
+      const finalResult = normalized.result ?? normalized.raw ?? parsed;
+      const fileData = extractFileData(finalResult);
+
+      setSubmitted(url);
+      setUrl("");
+
+      if (normalized.status && CONTINUOUS_STATUSES.has(normalized.status)) {
+        setExecutionStatus(normalized);
+        if (normalized.jobId) {
+          console.log('Starting polling for job ID:', normalized.jobId);
+          startPolling(normalized.jobId);
+        } else {
+          setError('Received processing status without a job identifier.');
+        }
+        return;
       }
-      else {
-        setResponseData({ raw: data });
-        console.log('Received raw data response:', data);
-        setSubmitted(url);
-        console.log('Submitted URL:', url);
-        setUrl("");
+
+      if (normalized.status === 'completed') {
+        setExecutionStatus(normalized);
+        setResponseData(fileData.pdfBlob || fileData.pdfBase64 ? { ...fileData, raw: finalResult } : { raw: finalResult });
+        return;
       }
+
+      if (normalized.jobId && normalized.result && !normalized.status) {
+        // Workflow responded with immediate result but included a job id
+        setExecutionStatus(normalized);
+        setResponseData(fileData.pdfBlob || fileData.pdfBase64 ? { ...fileData, raw: finalResult } : { raw: finalResult });
+        return;
+      }
+
+      setExecutionStatus(normalized);
+      setResponseData(fileData.pdfBlob || fileData.pdfBase64 ? { ...fileData, raw: finalResult } : { raw: finalResult });
+      console.log('Received raw data response:', normalized);
     } catch (err) {
       console.error("Error calling webhook:", err);
       setError(err.message || "Failed to submit URL. Please try again.");
@@ -453,11 +600,11 @@ const SEOFeedback = () => {
             <div className="submitted">
               <strong>Submitted URL:</strong>
               <div className="submitted-url">{submitted}</div>
-              {(loading || executionStatus?.status === 'processing') && (
+              {(loading || isProcessing) && (
                 <Box sx={{ textAlign: 'center', color: 'rgba(255,255,255,0.8)', my: 2 }}>
-                  <Typography>{executionStatus?.status === 'processing' ? 'Processing SEO analysis...' : 'Submitting request...'}</Typography>
+                  <Typography>{isProcessing ? 'Processing SEO analysis...' : 'Submitting request...'}</Typography>
                   <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'rgba(255,255,255,0.6)' }}>
-                    {executionStatus?.message || 'This may take a few minutes'}
+                    {executionStatus?.message || (isProcessing ? 'This may take a few minutes' : 'Awaiting response')}
                   </Typography>
                 </Box>
               )}

@@ -1,54 +1,54 @@
 import fetch from 'node-fetch';
 
-// Vercel serverless function for status endpoint
+// Vercel serverless function for status endpoint that forwards to a public n8n webhook
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { executionId } = req.query;
-    const N8N_API = process.env.N8N_API || '';
-    const N8N_API_KEY = process.env.N8N_API_KEY || '';
+    const { jobId = '' } = req.query;
+    const statusEndpoint = process.env.TARGET_STATUS_WEBHOOK || '';
 
-    if (!executionId) {
-        return res.status(400).json({ error: 'No executionId provided' });
+    if (!jobId) {
+        return res.status(400).json({ error: 'No jobId provided' });
     }
 
-    if (!N8N_API) {
-        return res.status(404).json({ error: 'Not found' });
-    }
-    // If the API requires authentication but no key is configured, return a clear message
-    if (!N8N_API_KEY) {
-        return res.status(401).json({ error: 'Unauthorized', message: 'N8N_API_KEY not configured on server' });
+    if (!statusEndpoint) {
+        return res.status(500).json({
+            error: 'TARGET_STATUS_WEBHOOK not configured',
+            message: 'Set the public n8n status webhook URL in the environment before calling this endpoint.'
+        });
     }
 
     try {
-        const apiRes = await fetch(`${N8N_API}/executions/${executionId}`, {
+        const url = new URL(statusEndpoint);
+        url.searchParams.set('jobId', jobId);
+
+        const forwardRes = await fetch(url.toString(), {
+            method: 'GET',
             headers: {
-                ...(N8N_API_KEY ? { 'X-N8N-API-KEY': N8N_API_KEY } : {}),
-                'Accept': 'application/json'
+                Accept: 'application/json'
             }
         });
 
-        if (!apiRes.ok) {
-            const txt = await apiRes.text();
-            return res.status(apiRes.status).json({ error: txt });
-        }
-
-        const apiJson = await apiRes.json();
-        const normalized = {
-            executionId,
-            status: apiJson.finished ? 'completed' : 'processing',
-            message: apiJson.message || null,
-            result: apiJson,
-            cachedAt: Date.now()
-        };
+        const text = await forwardRes.text();
+        const contentType = forwardRes.headers.get('content-type') || 'application/json';
 
         res.setHeader('Access-Control-Allow-Origin', '*');
-        return res.json(normalized);
+        res.setHeader('Content-Type', contentType);
+        res.status(forwardRes.status);
 
+        if (contentType.includes('application/json')) {
+            try {
+                return res.json(JSON.parse(text));
+            } catch (err) {
+                console.warn('Failed to parse status webhook JSON response, returning raw text');
+            }
+        }
+
+        return res.send(text);
     } catch (err) {
-        console.error('Error fetching n8n API for execId', executionId, err);
+        console.error('Error calling status webhook for jobId', jobId, err);
         return res.status(500).json({ error: String(err) });
     }
 }
